@@ -1,0 +1,64 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AX7-SOC Yield Advisor</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b2330;--mu:#667085;--bd:#e3e6eb;--ac:#0f766e;--bad:#c0392b;--nv:#14305a;--am:#d9951f}
+@media(prefers-color-scheme:dark){:root{--bg:#0f141b;--card:#171e28;--tx:#e6e9ee;--mu:#8b95a5;--bd:#273140;--ac:#2dd4bf;--bad:#f07167;--nv:#6ea8fe;--am:#f2b84b}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:16px 24px;border-bottom:1px solid var(--bd);background:var(--card)}h1{margin:0;font-size:20px}header small{color:var(--mu)}
+nav{display:flex;gap:4px;padding:8px 24px;flex-wrap:wrap;background:var(--card);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:5}
+nav button{border:0;background:none;color:var(--mu);padding:7px 12px;border-radius:6px;font:inherit;cursor:pointer}nav button.on{background:var(--ac);color:#fff}
+main{padding:20px 24px;max-width:1200px;margin:auto}section{display:none}section.on{display:block}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+.kpi b{display:block;font-size:26px}.kpi span{color:var(--mu)}h2{font-size:16px;margin:0 0 8px}p.n{color:var(--mu);margin:4px 0 10px}
+canvas{width:100%;display:block}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd)}th{color:var(--mu);font-weight:600}
+.tag{padding:2px 8px;border-radius:9px;background:var(--bd);font-size:12px}.High{color:var(--ac)}.Medium{color:var(--am)}.maps{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.maps div{text-align:center;font-size:12px}
+.wrap{overflow-x:auto}.lg{color:var(--mu);font-size:12px}
+</style></head><body>
+<header><h1>AX7-SOC Yield Advisor</h1><small>Wafer sort · final test · burn-in — computed locally from the CSVs in /data</small></header>
+<nav id="nav"></nav><main>
+<section id="s0"><div class="grid" id="kpi"></div><div class="card"><h2>Lot yield with EWMA excursion detector</h2><p class="n" id="exn"></p><canvas id="c_lots" height="260"></canvas><div class="lg">grey = lot yield · blue = EWMA (λ=0.2) · red dashed = EWMA LCL · amber = Vt_n shift lots (WAT)</div></div>
+<div class="card"><h2>Fail Pareto (final disposition)</h2><canvas id="c_par" height="240"></canvas></div></section>
+<section id="s1"><div class="card"><h2>Wafer Map Pattern AI</h2><p class="n" id="pn"></p><div id="maps"></div><div class="lg">red = fail die, green = pass. Classes from radial fail-density features (edge vs. centre vs. mid-radius).</div></div></section>
+<section id="s2"><div class="card"><h2>Root Cause Engine — commonality (Fisher exact)</h2><p class="n">Association, not proof: confirm with a tool-down or split-lot experiment.</p><div class="wrap"><table id="rct"></table></div></div></section>
+<section id="s3"><div class="card"><h2>WAT → sort correlation</h2><p class="n" id="wn"></p><canvas id="c_wat" height="280"></canvas></div></section>
+<section id="s4"><div class="card"><h2>Probe card × site</h2><p class="n" id="pbn"></p><div class="wrap"><table id="pbt"></table></div></div></section>
+<section id="s5"><div class="card"><h2>Outlier screening vs. burn-in outcome</h2><p class="n" id="osn"></p><div class="wrap"><table id="ost"></table></div></div></section>
+<section id="s6"><div class="card"><h2>Test time optimizer</h2><p class="n" id="ttn"></p><div class="wrap"><table id="ttt"></table></div></div></section>
+<section id="s7"><div class="card"><h2>Advisor inbox — ranked actions</h2><p class="n">Recommend-only (autonomy level 1): every action needs the approval shown.</p><div class="wrap"><table id="rect"></table></div></div></section>
+</main><script>
+const DATA=/*DATA*/null;const $=id=>document.getElementById(id);const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const tabs=['Overview','Wafer maps','Root cause','WAT correlation','Probe','Outliers','Test time','Advisor inbox'];
+tabs.forEach((t,i)=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>show(i);$('nav').append(b)});
+function show(i){document.querySelectorAll('section').forEach((s,j)=>s.classList.toggle('on',i==j));document.querySelectorAll('nav button').forEach((b,j)=>b.classList.toggle('on',i==j));draw()}
+function tbl(el,h,rows){$(el).innerHTML='<tr>'+h.map(x=>`<th>${x}</th>`).join('')+'</tr>'+rows.map(r=>'<tr>'+r.map(x=>`<td>${x}</td>`).join('')+'</tr>').join('')}
+function cv(id,h){const c=$(id),r=devicePixelRatio||1;c.width=c.clientWidth*r;c.height=h*r;const g=c.getContext('2d');g.scale(r,r);g.font='11px system-ui';return[g,c.clientWidth,h]}
+function axes(g,W,H,x0,x1,y0,y1,fx){g.strokeStyle=css('--bd');g.fillStyle=css('--mu');for(let i=0;i<=4;i++){const y=H-24-(H-40)*i/4;g.beginPath();g.moveTo(44,y);g.lineTo(W-8,y);g.stroke();g.fillText((y0+(y1-y0)*i/4).toFixed(1),4,y+3)}
+for(let i=0;i<=4;i++){const x=44+(W-52)*i/4;g.fillText(fx?fx(x0+(x1-x0)*i/4):(x0+(x1-x0)*i/4).toFixed(0),x-10,H-8)}}
+function drawLots(){const L=DATA.lots,[g,W,H]=cv('c_lots',260),n=L.y.length;const lo=Math.min(...L.y)-1,hi=Math.max(...L.y)+1;const X=i=>44+(W-52)*i/(n-1),Y=v=>H-24-(H-40)*(v-lo)/(hi-lo);
+axes(g,W,H,0,n-1,lo,hi,v=>L.id[Math.round(v)].slice(-4));
+const vts=DATA.vt_segment;if(vts){const a=L.id.indexOf(vts[0]),b=L.id.indexOf(vts[1]);g.fillStyle='rgba(217,149,31,.18)';g.fillRect(X(a)-4,10,X(b)-X(a)+8,H-34)}
+const line=(a,c,w)=>{g.strokeStyle=c;g.lineWidth=w;g.beginPath();a.forEach((v,i)=>i?g.lineTo(X(i),Y(v)):g.moveTo(X(i),Y(v)));g.stroke()};line(L.y,css('--mu'),1);line(L.ewma,css('--nv'),2.5);
+g.setLineDash([5,4]);g.strokeStyle=css('--bad');g.beginPath();g.moveTo(44,Y(L.lcl));g.lineTo(W-8,Y(L.lcl));g.stroke();g.setLineDash([]);
+if(L.ew_alarm!=null){g.strokeStyle=css('--bad');g.beginPath();g.moveTo(X(L.ew_alarm),10);g.lineTo(X(L.ew_alarm),H-24);g.stroke()}}
+function bars(id,items,col){const[g,W,H]=cv(id,id=='c_par'?240:220),m=Math.max(...items.map(x=>x[1])),bw=(W-60)/items.length;items.forEach((x,i)=>{const h=(H-60)*x[1]/m;g.fillStyle=i<3?css('--bad'):css('--nv');g.fillRect(50+i*bw,H-40-h,bw-8,h);g.fillStyle=css('--mu');g.fillText(x[0],50+i*bw,H-26);g.fillText(x[1],50+i*bw,H-44-h)})}
+function drawWat(){const L=DATA.lots,[g,W,H]=cv('c_wat',280),xs=L.vtn,ys=L.y,x0=Math.min(...xs)-1,x1=Math.max(...xs)+1,y0=Math.min(...ys)-1,y1=Math.max(...ys)+1;axes(g,W,H,x0,x1,y0,y1,v=>v.toFixed(0));
+const vs=DATA.vt_segment,a=vs?L.id.indexOf(vs[0]):-1,b=vs?L.id.indexOf(vs[1]):-1;xs.forEach((x,i)=>{g.fillStyle=i>=a&&i<=b?css('--am'):css('--nv');g.beginPath();g.arc(44+(W-52)*(x-x0)/(x1-x0),H-24-(H-40)*(ys[i]-y0)/(y1-y0),5,0,7);g.fill()});g.fillStyle=css('--mu');g.fillText('lot mean Vt_n (mV)  →   y: lot yield %',W-230,16)}
+function drawMaps(){const el=$('maps');if(el.dataset.done)return;el.dataset.done=1;const by={};DATA.maps.forEach(m=>(by[m.pattern]=by[m.pattern]||[]).push(m));
+el.innerHTML=Object.entries(by).map(([k,v])=>`<h2 style="margin-top:12px">${k} (${DATA.patterns[k]} wafers; worst ${v.length} shown)</h2><div class="maps">${v.map((m,i)=>`<div><canvas width=130 height=130 data-k="${k}|${i}"></canvas>${m.lot}-${m.wafer} · ${m.y}%</div>`).join('')}</div>`).join('');
+el.querySelectorAll('canvas').forEach(c=>{const[k,i]=c.dataset.k.split('|'),m=by[k][i],g=c.getContext('2d');m.map.forEach((r,y)=>[...r].forEach((v,x)=>{if(v=='.')return;g.fillStyle=v=='1'?'#c0392b':'#9fd0b8';g.fillRect(x*5,y*5,5,5)}))})}
+function draw(){drawLots();bars('c_par',DATA.pareto);drawWat();drawMaps()}
+const D=DATA,K=D.kpi,sc=D.screens,tt=D.testtime;
+$('kpi').innerHTML=[['Final yield',K.yield_final+'%'],['First-pass yield',K.yield_fp+'%'],['Wafers / lots',K.wafers+' / '+K.lots],['Good die',K.good.toLocaleString()],['Burn-in fails',sc.burnin]].map(([a,b])=>`<div class="card kpi"><b>${b}</b><span>${a}</span></div>`).join('');
+const L=D.lots;$('exn').textContent=L.ew_alarm==null?'No EWMA alarm raised.':`EWMA alarm at lot ${L.id[L.ew_alarm]} (position ${L.ew_alarm+1}); Shewhart ${L.sh_alarm==null?'never alarmed':'alarm at lot '+L.id[L.sh_alarm]}. Baseline ${L.mu}%, EWMA LCL ${L.lcl}%.`;
+$('pn').textContent=Object.entries(D.patterns).map(([k,v])=>k+': '+v).join(' · ');
+tbl('rct',['Signature','Factor','Wafers','Affected %','Baseline %','Fisher p','Yield %','Est. loss (pts)'],D.rootcause.map(r=>[r.signature,'<b>'+r.factor+'</b>',r.wafers,r.rate,r.base,r.p.toExponential(1),r.yield_,r.loss]));
+$('wn').textContent=`Lot Vt_n vs lot yield: r = ${D.vt_corr_yield}. Highlighted lots ${D.vt_segment?D.vt_segment[0]+' to '+D.vt_segment[1]:'—'} show a Vt_n shift of about +18 mV.`;
+tbl('pbt',['Card','Site','Yield %','Contact fail %','Mean Rc (Ω)','Contact fails','Retest recovery %'],D.probe.map(r=>[r.probe_card_id,r.site,r.yield_,r.contact,r.rc,r.cfails,r.recovery]));
+$('pbn').textContent=`Contact-bin retest: ${D.retest.recovered} of ${D.retest.retested} fails recovered (${(100*D.retest.recovered/D.retest.retested).toFixed(0)}%). Probe loss is recoverable test loss, not process loss.`;
+$('osn').textContent=`Base burn-in fail rate on ${sc.n.toLocaleString()} final-test die: ${sc.base_rate}%.`;
+tbl('ost',['Screen','Die flagged','Burn-in fail % (precision)','Recall %','Yield cost (pt)','Lift vs base'],[['DPAT IDDQ (k=6)',sc.dpat],['GDBN (≥5 failing neighbours)',sc.gdbn],['Combined',sc.both]].map(([n,s])=>[n,s.flagged,s.precision,s.recall,s.yield_cost,(s.precision/sc.base_rate).toFixed(0)+'×']));
+$('ttn').textContent=`RING_OSC ↔ FMAX correlation r = ${tt.corr_ringosc_fmax}. Candidates ${tt.candidates.join(', ')} would save ≈${tt.saved_pct}% of sort test time. Note: stop-on-fail data makes every fail "unique"; bound = 3/n (rule of three).`;
+tbl('ttt',['Test','Executed','Fails','ms/die','Share of time %','95% escape bound (DPPM)','Candidate'],tt.rows.map(r=>[r.test,r.executed.toLocaleString(),r.fails,r.ms,r.share,r.bound_dppm,tt.candidates.includes(r.test)?'<span class="tag">sample/remove</span>':'']));
+tbl('rect',['#','Type','Action','Evidence','Est. gain (pts)','Confidence','Risk','Approval'],D.recs.map((r,i)=>[i+1,r.type,'<b>'+r.title+'</b>',r.evidence,r.gain||'–','<b class="'+r.conf+'">'+r.conf+'</b>',r.risk,r.approval]));
+addEventListener('resize',draw);show(0);
+</script></body></html>
