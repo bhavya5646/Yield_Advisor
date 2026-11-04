@@ -16,7 +16,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("?? Yield Advisor")
+st.title("Yield Advisor")
 st.caption("AI-powered Semiconductor Yield Analysis and Optimization")
 
 st.sidebar.title("Yield Advisor")
@@ -26,7 +26,7 @@ st.sidebar.info(
     "root-cause analysis, probe performance and recommendations."
 )
 
-if st.sidebar.button("?? Refresh Analysis"):
+if st.sidebar.button("Refresh Analysis"):
     st.cache_data.clear()
     st.rerun()
 
